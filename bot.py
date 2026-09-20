@@ -13,7 +13,7 @@ CHAT_ID = os.getenv("CHAT_ID")
 
 BINANCE_URL = "https://data-api.binance.vision"
 
-TOP_COINS = 200
+TOP_COINS = 100
 
 TIMEFRAMES = {
     "1D": "1d",
