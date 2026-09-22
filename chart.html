@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TradingView S/R Signal Chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #0b0f14; color: #e8eef5; font-family: Arial, sans-serif; }
+    body { display: flex; flex-direction: column; }
+    #info { padding: 12px 14px; background: #111822; border-bottom: 1px solid #263241; }
+    #title { font-size: 18px; font-weight: 700; }
+    #meta { margin-top: 5px; font-size: 13px; color: #aeb9c6; line-height: 1.5; }
+    #chart { flex: 1; min-height: 0; }
+    #open-tv { margin-top: 9px; display: inline-block; padding: 8px 11px; border-radius: 7px; background: #1e88e5; color: white; text-decoration: none; font-size: 13px; }
+    #status { padding: 8px 14px; font-size: 12px; color: #9aa8b6; background: #0e141c; }
+    .error { color: #ff8d8d; }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <div id="title">Loading…</div>
+    <div id="meta"></div>
+    <a id="open-tv" target="_blank" rel="noopener noreferrer">Open TradingView.com</a>
+  </div>
+  <div id="chart"></div>
+  <div id="status">Loading market data…</div>
+
+<script>
+(function () {
+  const qs = new URLSearchParams(location.search);
+  const symbol = (qs.get('symbol') || 'BTCUSDT').toUpperCase();
+  const timeframe = (qs.get('timeframe') || '1H').toUpperCase();
+  const level = Number(qs.get('level'));
+  const kind = (qs.get('kind') || '').toLowerCase();
+  const signal = qs.get('signal') || '';
+  const score = qs.get('score') || '';
+  const currentPrice = qs.get('price') || '';
+
+  const intervalMap = { '1D': '1d', '4H': '4h', '1H': '1h' };
+  const tvIntervalMap = { '1D': 'D', '4H': '240', '1H': '60' };
+  const interval = intervalMap[timeframe] || '1h';
+  const tvInterval = tvIntervalMap[timeframe] || '60';
+  const tvSymbol = 'BINANCE:' + symbol;
+  const tvUrl = 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(tvSymbol) + '&interval=' + tvInterval;
+
+  const title = document.getElementById('title');
+  const meta = document.getElementById('meta');
+  const status = document.getElementById('status');
+  const tvButton = document.getElementById('open-tv');
+  tvButton.href = tvUrl;
+
+  const actionName = {
+    BREAK_UP: 'Resistance Break',
+    BREAK_DOWN: 'Support Break',
+    REJECTION_RESISTANCE: 'Resistance Rejection',
+    REJECTION_SUPPORT: 'Support Rejection'
+  }[signal] || (kind === 'support' ? 'Support' : 'Resistance');
+
+  title.textContent = symbol + ' · ' + timeframe;
+  meta.innerHTML = actionName + ' · S/R <b>' + (Number.isFinite(level) ? level : '—') + '</b>' +
+    (score ? ' · Score ' + score + '/100' : '') +
+    (currentPrice ? ' · Price ' + currentPrice : '');
+
+  const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+    layout: { background: { type: 'solid', color: '#0b0f14' }, textColor: '#c9d3de' },
+    grid: { vertLines: { color: '#17202a' }, horzLines: { color: '#17202a' } },
+    rightPriceScale: { borderColor: '#263241' },
+    timeScale: { borderColor: '#263241', timeVisible: true, secondsVisible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    width: document.getElementById('chart').clientWidth,
+    height: document.getElementById('chart').clientHeight
+  });
+  const series = chart.addCandlestickSeries({
+    upColor: '#26a69a', downColor: '#ef5350',
+    borderVisible: false,
+    wickUpColor: '#26a69a', wickDownColor: '#ef5350'
+  });
+
+  if (Number.isFinite(level) && level > 0) {
+    series.createPriceLine({
+      price: level,
+      color: kind === 'support' ? '#26a69a' : '#ef5350',
+      lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Solid,
+      axisLabelVisible: true,
+      title: kind === 'support' ? 'SUPPORT' : 'RESISTANCE'
+    });
+  }
+
+  function resize() {
+    chart.applyOptions({
+      width: document.getElementById('chart').clientWidth,
+      height: document.getElementById('chart').clientHeight
+    });
+  }
+  window.addEventListener('resize', resize);
+
+  async function load() {
+    try {
+      const url = 'https://data-api.binance.vision/api/v3/klines?symbol=' + encodeURIComponent(symbol) + '&interval=' + encodeURIComponent(interval) + '&limit=220';
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Binance HTTP ' + res.status);
+      const raw = await res.json();
+      const candles = raw.map(r => ({
+        time: Math.floor(Number(r[0]) / 1000),
+        open: Number(r[1]),
+        high: Number(r[2]),
+        low: Number(r[3]),
+        close: Number(r[4])
+      }));
+      series.setData(candles);
+      chart.timeScale().fitContent();
+      status.textContent = 'S/R level is drawn from the signal: ' + (Number.isFinite(level) ? level : '—');
+    } catch (e) {
+      status.textContent = 'Chart data error: ' + e.message;
+      status.className = 'error';
+    }
+  }
+  load();
+})();
+</script>
+</body>
+</html>
