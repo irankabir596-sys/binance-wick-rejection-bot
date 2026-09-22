@@ -757,12 +757,31 @@ def load_state() -> Dict[str, int]:
 
 
 def save_state(state: Dict[str, int]) -> None:
-    # Keep only the newest N state entries.
-    if len(state) > MAX_STATE_ITEMS:
-        items = sorted(state.items(), key=lambda kv: kv[1], reverse=True)[:MAX_STATE_ITEMS]
-        state = dict(items)
+    # Keep only valid numeric state entries and the newest N entries.
+    clean_state = {}
+
+    for key, value in state.items():
+        try:
+            clean_state[str(key)] = int(value)
+        except (TypeError, ValueError):
+            continue
+
+    if len(clean_state) > MAX_STATE_ITEMS:
+        items = sorted(
+            clean_state.items(),
+            key=lambda kv: kv[1],
+            reverse=True
+        )[:MAX_STATE_ITEMS]
+
+        clean_state = dict(items)
+
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+        json.dump(
+            clean_state,
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
 
 
 def send_telegram(text: str) -> bool:
